@@ -6,7 +6,6 @@ import {
   CPUStats,
   DiskSizeStats,
   DiskStats,
-  GraphResponse,
   LineGraphOptions,
   MemoryStats,
   NetworkStats,
@@ -26,6 +25,7 @@ const STAT_SERVER_PORT = 7777
 
 const BLACK = '#000000'
 const WHITE = '#FFFFFF'
+const THEME_TO_AXIS_COLOR = { light: BLACK, dark: WHITE }
 
 async function triggerStatCollect(): Promise<void> {
   logger.debug('Triggering stat collect ...')
@@ -38,19 +38,6 @@ async function triggerStatCollect(): Promise<void> {
 }
 
 async function reportWorkflowMetrics(): Promise<string> {
-  const theme: string = core.getInput('theme', { required: false })
-  let axisColor = BLACK
-  switch (theme) {
-    case 'light':
-      axisColor = BLACK
-      break
-    case 'dark':
-      axisColor = WHITE
-      break
-    default:
-      core.warning(`Invalid theme: ${theme}`)
-  }
-
   const { userLoadX, systemLoadX } = await getCPUStats()
   const { activeMemoryX, availableMemoryX } = await getMemoryStats()
   const { networkReadX, networkWriteX } = await getNetworkStats()
@@ -61,7 +48,6 @@ async function reportWorkflowMetrics(): Promise<string> {
     userLoadX && userLoadX.length && systemLoadX && systemLoadX.length
       ? await getStackedAreaGraph({
           label: 'CPU Load (%)',
-          axisColor,
           areas: [
             {
               label: 'User Load',
@@ -84,7 +70,6 @@ async function reportWorkflowMetrics(): Promise<string> {
     availableMemoryX.length
       ? await getStackedAreaGraph({
           label: 'Memory Usage (MB)',
-          axisColor,
           areas: [
             {
               label: 'Used',
@@ -104,7 +89,6 @@ async function reportWorkflowMetrics(): Promise<string> {
     networkReadX && networkReadX.length
       ? await getLineGraph({
           label: 'Network I/O Read (MB)',
-          axisColor,
           line: {
             label: 'Read',
             color: '#be4d25',
@@ -117,7 +101,6 @@ async function reportWorkflowMetrics(): Promise<string> {
     networkWriteX && networkWriteX.length
       ? await getLineGraph({
           label: 'Network I/O Write (MB)',
-          axisColor,
           line: {
             label: 'Write',
             color: '#6c25be',
@@ -130,7 +113,6 @@ async function reportWorkflowMetrics(): Promise<string> {
     diskReadX && diskReadX.length
       ? await getLineGraph({
           label: 'Disk I/O Read (MB)',
-          axisColor,
           line: {
             label: 'Read',
             color: '#be4d25',
@@ -143,7 +125,6 @@ async function reportWorkflowMetrics(): Promise<string> {
     diskWriteX && diskWriteX.length
       ? await getLineGraph({
           label: 'Disk I/O Write (MB)',
-          axisColor,
           line: {
             label: 'Write',
             color: '#6c25be',
@@ -156,7 +137,6 @@ async function reportWorkflowMetrics(): Promise<string> {
     diskUsedX && diskUsedX.length && diskAvailableX && diskAvailableX.length
       ? await getStackedAreaGraph({
           label: 'Disk Usage (MB)',
-          axisColor,
           areas: [
             {
               label: 'Used',
@@ -174,18 +154,10 @@ async function reportWorkflowMetrics(): Promise<string> {
 
   const postContentItems: string[] = []
   if (cpuLoad) {
-    postContentItems.push(
-      '### CPU Metrics',
-      `![${cpuLoad.id}](${cpuLoad.url})`,
-      ''
-    )
+    postContentItems.push('### CPU Metrics', cpuLoad, '')
   }
   if (memoryUsage) {
-    postContentItems.push(
-      '### Memory Metrics',
-      `![${memoryUsage.id}](${memoryUsage.url})`,
-      ''
-    )
+    postContentItems.push('### Memory Metrics', memoryUsage, '')
   }
   if ((networkIORead && networkIOWrite) || (diskIORead && diskIOWrite)) {
     postContentItems.push(
@@ -196,20 +168,16 @@ async function reportWorkflowMetrics(): Promise<string> {
   }
   if (networkIORead && networkIOWrite) {
     postContentItems.push(
-      `| Network I/O   | ![${networkIORead.id}](${networkIORead.url})        | ![${networkIOWrite.id}](${networkIOWrite.url})        |`
+      `| Network I/O   | ${networkIORead}        | ${networkIOWrite}        |`
     )
   }
   if (diskIORead && diskIOWrite) {
     postContentItems.push(
-      `| Disk I/O      | ![${diskIORead.id}](${diskIORead.url})              | ![${diskIOWrite.id}](${diskIOWrite.url})              |`
+      `| Disk I/O      | ${diskIORead}              | ${diskIOWrite}              |`
     )
   }
   if (diskSizeUsage) {
-    postContentItems.push(
-      '### Disk Size Metrics',
-      `![${diskSizeUsage.id}](${diskSizeUsage.url})`,
-      ''
-    )
+    postContentItems.push('### Disk Size Metrics', diskSizeUsage, '')
   }
 
   return postContentItems.join('\n')
@@ -355,69 +323,97 @@ async function getDiskSizeStats(): Promise<ProcessedDiskSizeStats> {
   return { diskAvailableX, diskUsedX }
 }
 
-async function getLineGraph(options: LineGraphOptions): Promise<GraphResponse> {
-  const payload = {
-    options: {
-      width: 1000,
-      height: 500,
-      xAxis: {
-        label: 'Time'
-      },
-      yAxis: {
-        label: options.label
-      },
-      timeTicks: {
-        unit: 'auto'
-      }
-    },
-    lines: [options.line]
-  }
-
-  let response = null
-  try {
-    response = await axios.put(
-      'https://api.globadge.com/v1/chartgen/line/time',
-      payload
+function generatePictureHTML(
+  themeToURLTuple: (string | null)[][],
+  label: string
+): string {
+  return `<picture>${themeToURLTuple
+    .map(
+      ([theme, url]) =>
+        `<source media="(prefers-color-scheme: ${theme})" srcset="${url}">`
     )
-  } catch (error: any) {
-    logger.error(error)
-    logger.error(`getLineGraph ${JSON.stringify(payload)}`)
-  }
+    .join(
+      ''
+    )}<img alt="${label}" src="${Object.fromEntries(themeToURLTuple).light.url}"></picture>`
+}
 
-  return response?.data
+async function getLineGraph(options: LineGraphOptions): Promise<string> {
+  const themeToURLTuple = await Promise.all(
+    Object.entries(THEME_TO_AXIS_COLOR).map(async ([theme, color]) => {
+      const payload = {
+        options: {
+          width: 1000,
+          height: 500,
+          xAxis: {
+            label: 'Time',
+            color
+          },
+          yAxis: {
+            label: options.label,
+            color
+          },
+          timeTicks: {
+            unit: 'auto'
+          }
+        },
+        lines: [options.line]
+      }
+
+      let response = null
+      try {
+        response = await axios.put(
+          'https://api.globadge.com/v1/chartgen/line/time',
+          payload
+        )
+      } catch (error: any) {
+        logger.error(error)
+        logger.error(`getLineGraph ${JSON.stringify(payload)}`)
+      }
+
+      return [theme, response?.data.url]
+    })
+  )
+  return generatePictureHTML(themeToURLTuple, options.label)
 }
 
 async function getStackedAreaGraph(
   options: StackedAreaGraphOptions
-): Promise<GraphResponse> {
-  const payload = {
-    options: {
-      width: 1000,
-      height: 500,
-      xAxis: {
-        label: 'Time'
-      },
-      yAxis: {
-        label: options.label
-      },
-      timeTicks: {
-        unit: 'auto'
+): Promise<string> {
+  const themeToURLTuple = await Promise.all(
+    Object.entries(THEME_TO_AXIS_COLOR).map(async ([theme, color]) => {
+      const payload = {
+        options: {
+          width: 1000,
+          height: 500,
+          xAxis: {
+            label: 'Time',
+            color
+          },
+          yAxis: {
+            label: options.label,
+            color
+          },
+          timeTicks: {
+            unit: 'auto'
+          }
+        },
+        areas: options.areas
       }
-    },
-    areas: options.areas
-  }
 
-  let response = null
-  try {
-    response = await axios.put(
-      'https://api.globadge.com/v1/chartgen/stacked-area/time',
-      payload
-    )
-  } catch (error: any) {
-    logger.error(error)
-    logger.error(`getStackedAreaGraph ${JSON.stringify(payload)}`)
-  }
-  return response?.data
+      let response = null
+      try {
+        response = await axios.put(
+          'https://api.globadge.com/v1/chartgen/stacked-area/time',
+          payload
+        )
+      } catch (error: any) {
+        logger.error(error)
+        logger.error(`getStackedAreaGraph ${JSON.stringify(payload)}`)
+      }
+      return [theme, response?.data.url]
+    })
+  )
+  return generatePictureHTML(themeToURLTuple, options.label)
 }
 
 ///////////////////////////
