@@ -52,6 +52,7 @@ To use the action, add the following step before the steps you want to track.
 
 ```yaml
 permissions:
+  actions: read
   pull-requests: write
 jobs:
   workflow-telemetry-action:
