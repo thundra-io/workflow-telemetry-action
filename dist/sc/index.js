@@ -28583,10 +28583,12 @@ function getLineGraph(options) {
                 width: 1000,
                 height: 500,
                 xAxis: {
-                    label: 'Time'
+                    label: 'Time',
+                    color: options.axisColor
                 },
                 yAxis: {
-                    label: options.label
+                    label: options.label,
+                    color: options.axisColor
                 },
                 timeTicks: {
                     unit: 'auto'
@@ -28612,10 +28614,12 @@ function getStackedAreaGraph(options) {
                 width: 1000,
                 height: 500,
                 xAxis: {
-                    label: 'Time'
+                    label: 'Time',
+                    color: options.axisColor
                 },
                 yAxis: {
-                    label: options.label
+                    label: options.label,
+                    color: options.axisColor
                 },
                 timeTicks: {
                     unit: 'auto'
