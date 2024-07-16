@@ -1,4 +1,3 @@
-import * as core from '@actions/core'
 import * as stepTracer from './stepTracer'
 import * as statCollector from './statCollector'
 import * as processTracer from './processTracer'

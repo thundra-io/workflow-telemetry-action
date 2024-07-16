@@ -10,7 +10,9 @@ import { WorkflowJobType } from './interfaces'
 const { pull_request } = github.context.payload
 const { workflow, job, repo, runId, sha } = github.context
 const PAGE_SIZE = 100
-const octokit: Octokit = new Octokit()
+const octokit: Octokit = new Octokit({
+  auth: core.getInput('github_token')
+})
 
 async function getCurrentJob(): Promise<WorkflowJobType | null> {
   const _getCurrentJob = async (): Promise<WorkflowJobType | null> => {
