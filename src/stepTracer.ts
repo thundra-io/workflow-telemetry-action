@@ -31,7 +31,8 @@ function generateTraceChartForSteps(job: WorkflowJobType): string {
     }
     chartContent = chartContent.concat(
       '\t',
-      `${step.name.replace(/:/g, '-')} : `
+      // Quote the step names to work around https://github.com/mermaid-js/mermaid/issues/2495
+      `"${step.name.replace(/:/g, '-')}" : `
     )
 
     if (step.name === 'Set up job' && step.number === 1) {
