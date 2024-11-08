@@ -93,18 +93,15 @@ export interface GraphResponse {
 }
 
 export interface CompletedCommand {
-  readonly ts: string
-  readonly event: string
   readonly name: string
   readonly uid: number
   readonly pid: number
-  readonly ppid: string
-  readonly startTime: number
+  readonly ppid: number
+  readonly startTimeNs: number
   readonly fileName: string
   readonly args: string[]
-  readonly duration: number
+  readonly durationNs: number
   readonly exitCode: number
-  readonly order: number
 }
 
 export interface ProcEventParseOptions {

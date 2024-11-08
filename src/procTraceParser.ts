@@ -51,10 +51,7 @@ export async function parse(
   // Note: we use the crlfDelay option to recognize all instances of CR LF
   // ('\r\n') in input file as a single line break.
 
-  const activeCommands: Map<number, any> = new Map<number, any>()
-  const replacedCommands: Map<number, any> = new Map<number, any>()
   const completedCommands: CompletedCommand[] = []
-  let commandOrder: number = 0
 
   for await (let line of rl) {
     line = line.trim()
@@ -65,72 +62,21 @@ export async function parse(
       if (logger.isDebugEnabled()) {
         logger.debug(`Parsing trace process event: ${line}`)
       }
-      const event = JSON.parse(line)
-      event.order = ++commandOrder
-      if (!traceSystemProcesses && SYS_PROCS_TO_BE_IGNORED.has(event.name)) {
+      const event: CompletedCommand = JSON.parse(line)
+
+      // filter out short living processes.
+      if (event.durationNs < minDuration){
         continue
       }
-      if ('EXEC' === event.event) {
-        const existingCommand: any = activeCommands.get(event.pid)
-        activeCommands.set(event.pid, event)
-        if (existingCommand) {
-          replacedCommands.set(event.pid, existingCommand)
-        }
-      } else if ('EXIT' === event.event) {
-        let activeCommandCompleted: boolean = false
-        let replacedCommandCompleted: boolean = false
 
-        // Process active command
-        const activeCommand: any = activeCommands.get(event.pid)
-        activeCommands.delete(event.pid)
-        if (activeCommand) {
-          for (let key of Object.keys(event)) {
-            if (!activeCommand.hasOwnProperty(key)) {
-              activeCommand[key] = event[key]
-            }
-          }
-          activeCommandCompleted = true
-        }
-
-        // Process replaced command if there is
-        const replacedCommand: any = replacedCommands.get(event.pid)
-        replacedCommands.delete(event.pid)
-        if (replacedCommand && activeCommandCompleted) {
-          for (let key of Object.keys(event)) {
-            if (!replacedCommand.hasOwnProperty(key)) {
-              replacedCommand[key] = event[key]
-            }
-          }
-          const finishTime: number =
-            activeCommand.startTime + activeCommand.duration
-          replacedCommand.duration = finishTime - replacedCommand.startTime
-          replacedCommandCompleted = true
-        }
-
-        // Complete the replaced command first if there is
-        if (
-          replacedCommandCompleted &&
-          replacedCommand.duration > minDuration
-        ) {
-          completedCommands.push(replacedCommand)
-        }
-
-        // Then complete the actual command
-        if (activeCommandCompleted && activeCommand.duration > minDuration) {
-          completedCommands.push(activeCommand)
-        }
-      } else {
-        if (logger.isDebugEnabled()) {
-          logger.debug(`Unknown trace process event: ${line}`)
-        }
-      }
+      completedCommands.push(event)
     } catch (error: any) {
       logger.debug(`Unable to parse process trace event (${error}): ${line}`)
     }
   }
 
   completedCommands.sort((a: CompletedCommand, b: CompletedCommand) => {
-    return a.startTime - b.startTime
+    return a.startTimeNs - b.startTimeNs
   })
 
   if (logger.isDebugEnabled()) {
