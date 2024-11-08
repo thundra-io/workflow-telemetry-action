@@ -30,7 +30,6 @@
     "workflow",
     "ci-cd"
   ],
-  "type": "module",
   "author": "Serkan Özal <serkan@thundra.io>",
   "license": "MIT",
   "dependencies": {
