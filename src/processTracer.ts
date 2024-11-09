@@ -9,7 +9,7 @@ import * as logger from './logger'
 
 const PROC_TRACER_PID_KEY = 'PROC_TRACER_PID'
 const PROC_TRACER_OUTPUT_FILE_NAME = 'proc-trace.out'
-const PROC_TRACER_BINARY_NAME_UBUNTU: string = 'proc_tracer_ubuntu'
+const PROC_TRACER_BINARY_NAME_UBUNTU: string = 'proc-tracer'
 const DEFAULT_PROC_TRACE_CHART_MAX_COUNT = 100
 const GHA_FILE_NAME_PREFIX = '/home/runner/work/_actions/'
 
@@ -101,7 +101,7 @@ export async function start(): Promise<boolean> {
 
       core.saveState(PROC_TRACER_PID_KEY, child.pid?.toString())
 
-      logger.info(`Started process tracer pid=${child.pid?.toString()} $binary=${path.join(__dirname, `../proc-tracer/${procTracerBinaryName}`)} output${procTraceOutFilePath}`)
+      logger.info(`Started process tracer pid=${child.pid?.toString()} binary=${path.join(__dirname, `../proc-tracer/${procTracerBinaryName}`)} output${procTraceOutFilePath}`)
 
       return true
     } else {

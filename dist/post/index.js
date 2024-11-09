@@ -54559,7 +54559,7 @@ const procTraceParser_1 = __nccwpck_require__(9576);
 const logger = __importStar(__nccwpck_require__(4636));
 const PROC_TRACER_PID_KEY = 'PROC_TRACER_PID';
 const PROC_TRACER_OUTPUT_FILE_NAME = 'proc-trace.out';
-const PROC_TRACER_BINARY_NAME_UBUNTU = 'proc_tracer_ubuntu';
+const PROC_TRACER_BINARY_NAME_UBUNTU = 'proc-tracer';
 const DEFAULT_PROC_TRACE_CHART_MAX_COUNT = 100;
 const GHA_FILE_NAME_PREFIX = '/home/runner/work/_actions/';
 let finished = true;
@@ -54628,7 +54628,7 @@ function start() {
                 });
                 child.unref();
                 core.saveState(PROC_TRACER_PID_KEY, (_a = child.pid) === null || _a === void 0 ? void 0 : _a.toString());
-                logger.info(`Started process tracer pid=${(_b = child.pid) === null || _b === void 0 ? void 0 : _b.toString()} $binary=${path_1.default.join(__dirname, `../proc-tracer/${procTracerBinaryName}`)} output${procTraceOutFilePath}`);
+                logger.info(`Started process tracer pid=${(_b = child.pid) === null || _b === void 0 ? void 0 : _b.toString()} binary=${path_1.default.join(__dirname, `../proc-tracer/${procTracerBinaryName}`)} output${procTraceOutFilePath}`);
                 return true;
             }
             else {
