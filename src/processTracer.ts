@@ -154,7 +154,6 @@ export async function report(
     procTraceChartMaxCountInput?: number,
     procTraceTableShow?: boolean,
   }
-
 ): Promise<string | null> {
   const procTraceOutFilePath = options.procTraceOutFilePath ?? path.join(
     __dirname,

@@ -44526,7 +44526,6 @@ function parse(filePath, procEventParseOptions) {
         // Note: we use the crlfDelay option to recognize all instances of CR LF
         // ('\r\n') in input file as a single line break.
         const completedCommands = [];
-        let commandOrder = 0;
         try {
             for (var _d = true, rl_1 = __asyncValues(rl), rl_1_1; rl_1_1 = yield rl_1.next(), _a = rl_1_1.done, !_a; _d = true) {
                 _c = rl_1_1.value;
@@ -44541,6 +44540,10 @@ function parse(filePath, procEventParseOptions) {
                         logger.debug(`Parsing trace process event: ${line}`);
                     }
                     const event = JSON.parse(line);
+                    // filter out short living processes.
+                    if (event.durationNs < minDuration) {
+                        continue;
+                    }
                     completedCommands.push(event);
                 }
                 catch (error) {
@@ -44623,7 +44626,7 @@ const PROC_TRACER_OUTPUT_FILE_NAME = 'proc-trace.out';
 const PROC_TRACER_BINARY_NAME_UBUNTU = 'proc_tracer_ubuntu';
 const DEFAULT_PROC_TRACE_CHART_MAX_COUNT = 100;
 const GHA_FILE_NAME_PREFIX = '/home/runner/work/_actions/';
-let finished = false;
+let finished = true;
 function getProcessTracerBinaryName() {
     return __awaiter(this, void 0, void 0, function* () {
         const osInfo = yield systeminformation_1.default.osInfo();
@@ -44668,9 +44671,10 @@ function getExtraProcessInfo(command) {
 }
 ///////////////////////////
 function start() {
-    var _a;
+    var _a, _b;
     return __awaiter(this, void 0, void 0, function* () {
         logger.info(`Starting process tracer ...`);
+        finished = false;
         try {
             const procTracerBinaryName = yield getProcessTracerBinaryName();
             if (procTracerBinaryName) {
@@ -44683,12 +44687,12 @@ function start() {
                     procTraceOutFilePath
                 ], {
                     detached: true,
-                    stdio: 'ignore',
+                    stdio: 'inherit',
                     env: Object.assign({}, process.env)
                 });
                 child.unref();
                 core.saveState(PROC_TRACER_PID_KEY, (_a = child.pid) === null || _a === void 0 ? void 0 : _a.toString());
-                logger.info(`Started process tracer`);
+                logger.info(`Started process tracer pid=${(_b = child.pid) === null || _b === void 0 ? void 0 : _b.toString()} $binary=${path_1.default.join(__dirname, `../proc-tracer/${procTracerBinaryName}`)} output${procTraceOutFilePath}`);
                 return true;
             }
             else {
@@ -44726,31 +44730,32 @@ function finish(currentJob) {
     });
 }
 exports.finish = finish;
-function report(currentJob) {
+function report(currentJob, options) {
+    var _a, _b, _c, _d, _e, _f;
     return __awaiter(this, void 0, void 0, function* () {
-        logger.info(`Reporting process tracer result ...`);
+        const procTraceOutFilePath = (_a = options.procTraceOutFilePath) !== null && _a !== void 0 ? _a : path_1.default.join(__dirname, '../proc-tracer', PROC_TRACER_OUTPUT_FILE_NAME);
+        logger.info(`Reporting process tracer result file=${procTraceOutFilePath}`);
         if (!finished) {
             logger.info(`Skipped reporting process tracer since process tracer didn't finished`);
             return null;
         }
         try {
-            const procTraceOutFilePath = path_1.default.join(__dirname, '../proc-tracer', PROC_TRACER_OUTPUT_FILE_NAME);
             logger.info(`Getting process tracer result from file ${procTraceOutFilePath} ...`);
             let procTraceMinDuration = -1;
-            const procTraceMinDurationInput = core.getInput('proc_trace_min_duration');
+            const procTraceMinDurationInput = (_b = options.procTraceMinDurationInput) !== null && _b !== void 0 ? _b : core.getInput('proc_trace_min_duration');
             if (procTraceMinDurationInput) {
                 const minProcDurationVal = parseInt(procTraceMinDurationInput);
                 if (Number.isInteger(minProcDurationVal)) {
                     procTraceMinDuration = minProcDurationVal;
                 }
             }
-            const procTraceSysEnable = core.getInput('proc_trace_sys_enable') === 'true';
-            const procTraceChartShow = core.getInput('proc_trace_chart_show') === 'true';
-            const procTraceChartMaxCountInput = parseInt(core.getInput('proc_trace_chart_max_count'));
+            const procTraceSysEnable = (_c = options.procTraceSysEnable) !== null && _c !== void 0 ? _c : core.getInput('proc_trace_sys_enable') === 'true';
+            const procTraceChartShow = (_d = options.procTraceChartShow) !== null && _d !== void 0 ? _d : core.getInput('proc_trace_chart_show') === 'true';
+            const procTraceChartMaxCountInput = (_e = options.procTraceChartMaxCountInput) !== null && _e !== void 0 ? _e : parseInt(core.getInput('proc_trace_chart_max_count'));
             const procTraceChartMaxCount = Number.isInteger(procTraceChartMaxCountInput)
                 ? procTraceChartMaxCountInput
                 : DEFAULT_PROC_TRACE_CHART_MAX_COUNT;
-            const procTraceTableShow = core.getInput('proc_trace_table_show') === 'true';
+            const procTraceTableShow = (_f = options.procTraceTableShow) !== null && _f !== void 0 ? _f : core.getInput('proc_trace_table_show') === 'true';
             const completedCommands = yield (0, procTraceParser_1.parse)(procTraceOutFilePath, {
                 minDuration: procTraceMinDuration,
                 traceSystemProcesses: procTraceSysEnable
@@ -44759,7 +44764,7 @@ function report(currentJob) {
             let chartContent = '';
             if (procTraceChartShow) {
                 chartContent = chartContent.concat('gantt', '\n');
-                chartContent = chartContent.concat('\t', `title ${currentJob.name}`, '\n');
+                chartContent = chartContent.concat('\t', `title ${currentJob}`, '\n');
                 chartContent = chartContent.concat('\t', `dateFormat x`, '\n');
                 chartContent = chartContent.concat('\t', `axisFormat %H:%M:%S`, '\n');
                 const filteredCommands = [...completedCommands]
