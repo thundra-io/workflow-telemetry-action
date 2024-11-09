@@ -98,6 +98,10 @@ export async function start(): Promise<boolean> {
       )
       child.unref()
 
+      if(typeof child.pid !== "number") {
+        throw new Error("Error: Failed to start proc-tracer");
+      }
+
       core.saveState(PROC_TRACER_PID_KEY, child.pid?.toString())
 
       logger.info(`Started process tracer`)
