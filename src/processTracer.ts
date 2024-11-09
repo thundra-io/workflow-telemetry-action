@@ -90,21 +90,18 @@ export async function start(): Promise<boolean> {
         ],
         {
           detached: true,
-          stdio: 'ignore',
+          stdio: 'inherit',
           env: {
             ...process.env
           }
         }
       )
-      child.unref()
 
-      if(typeof child.pid !== "number") {
-        throw new Error("Error: Failed to start proc-tracer");
-      }
+      child.unref()
 
       core.saveState(PROC_TRACER_PID_KEY, child.pid?.toString())
 
-      logger.info(`Started process tracer`)
+      logger.info(`Started process tracer pid=${child.pid?.toString()} $binary=${path.join(__dirname, `../proc-tracer/${procTracerBinaryName}`)} output${procTraceOutFilePath}`)
 
       return true
     } else {
