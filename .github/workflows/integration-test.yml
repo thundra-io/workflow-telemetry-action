@@ -12,7 +12,9 @@ jobs:
           proc_trace_sys_enable: true
           proc_trace_chart_show: true
       - run: |
+          ls -a
+          ps aux
           sleep 1
-          sleep 4
-          sleep 2
           sleep 3
+          sleep 2
+          find -name "*.out"
