@@ -54724,9 +54724,9 @@ function report(currentJob, options) {
                         // to show red
                         chartContent = chartContent.concat('crit, ');
                     }
-                    const startTime = command.startTimeNs;
-                    const finishTime = command.startTimeNs + command.durationNs;
-                    chartContent = chartContent.concat(`${Math.min(startTime, finishTime)}, ${finishTime}`, '\n');
+                    const startTimeMs = Math.round(command.startTimeNs / 10e6);
+                    const finishTimeMs = Math.round((command.startTimeNs + command.durationNs) / 10e6);
+                    chartContent = chartContent.concat(`${startTimeMs}, ${finishTimeMs}`, '\n');
                 }
             }
             ///////////////////////////////////////////////////////////////////////////
@@ -54735,7 +54735,7 @@ function report(currentJob, options) {
                 const commandInfos = [];
                 commandInfos.push((0, sprintf_js_1.sprintf)('%-16s %7s %7s %7s %15s %15s %10s %-20s', 'NAME', 'UID', 'PID', 'PPID', 'START TIME', 'DURATION (ms)', 'EXIT CODE', 'FILE NAME + ARGS'));
                 for (const command of completedCommands) {
-                    commandInfos.push((0, sprintf_js_1.sprintf)('%-16s %7d %7d %7d %15d %15d %10d %s %s', command.name, command.uid, command.pid, command.ppid, command.startTimeNs, command.durationNs, command.exitCode, command.fileName, command.args.join(' ')));
+                    commandInfos.push((0, sprintf_js_1.sprintf)('%-16s %7d %7d %15d %15d %10d %s %s', command.name, command.pid, command.ppid, Math.round(command.startTimeNs / 10e6), Math.round(command.durationNs / 10e6), command.exitCode, command.fileName, command.args.join(' ')));
                 }
                 tableContent = commandInfos.join('\n');
             }

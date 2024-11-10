@@ -271,9 +271,8 @@ export async function report(
       for (const command of completedCommands) {
         commandInfos.push(
           sprintf(
-            '%-16s %7d %7d %7d %15d %15d %10d %s %s',
+            '%-16s %7d %7d %15d %15d %10d %s %s',
             command.name,
-            command.uid,
             command.pid,
             command.ppid,
             Math.round(command.startTimeNs / 10e6),
