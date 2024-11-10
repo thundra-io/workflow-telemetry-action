@@ -240,10 +240,10 @@ export async function report(
           chartContent = chartContent.concat('crit, ')
         }
 
-        const startTime: number = command.startTimeNs
-        const finishTime: number = command.startTimeNs + command.durationNs
+        const startTimeMs: number = Math.round(command.startTimeNs / 10e6)
+        const finishTimeMs: number = Math.round((command.startTimeNs + command.durationNs) / 10e6)
         chartContent = chartContent.concat(
-          `${Math.min(startTime, finishTime)}, ${finishTime}`,
+          `${startTimeMs}, ${finishTimeMs}`,
           '\n'
         )
       }
@@ -276,8 +276,8 @@ export async function report(
             command.uid,
             command.pid,
             command.ppid,
-            command.startTimeNs,
-            command.durationNs,
+            Math.round(command.startTimeNs / 10e6),
+            Math.round(command.durationNs / 10e6),
             command.exitCode,
             command.fileName,
             command.args.join(' ')
