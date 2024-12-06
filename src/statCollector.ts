@@ -2,7 +2,9 @@ import { ChildProcess, spawn } from 'child_process'
 import fs from 'fs/promises'
 import path from 'path'
 import axios from 'axios'
+import * as github from '@actions/github'
 import * as core from '@actions/core'
+import { DefaultArtifactClient } from '@actions/artifact'
 import {
   CPUStats,
   DiskSizeStats,
@@ -27,6 +29,8 @@ const STAT_SERVER_PORT = 7777
 
 const BLACK = '#000000'
 const WHITE = '#FFFFFF'
+
+const artifact = new DefaultArtifactClient()
 
 async function triggerStatCollect(): Promise<void> {
   logger.debug('Triggering stat collect ...')
@@ -242,8 +246,17 @@ async function getCPUStats(): Promise<ProcessedCPUStats> {
   const cpuStats = JSON.stringify({ userLoadX, systemLoadX })
   await fs
     .writeFile(outFilePath, cpuStats)
-    .then(() => {
+    .then(async () => {
       logger.info(`CPU stats saved to ${outFilePath}`)
+      await artifact
+        .uploadArtifact('cpu-stats-' + github.context.runId, [outFilePath], '/')
+        .then(() => {
+          logger.info(`CPU stats artifact uploaded`)
+        })
+        .catch((error: any) => {
+          logger.error(`Failed to upload CPU stats artifact`)
+          logger.error(error)
+        })
     })
     .catch((error: any) => {
       logger.error(`Failed to save CPU stats to ${outFilePath}`)
