@@ -238,10 +238,7 @@ async function getCPUStats(): Promise<ProcessedCPUStats> {
     })
   })
 
-  const outFilePath = path.join(
-    __dirname,
-    '../cpu-stats.json',
-  )
+  const outFilePath = path.join(__dirname, '../cpu-stats.json')
   const cpuStats = JSON.stringify({ userLoadX, systemLoadX })
   await fs
     .writeFile(outFilePath, cpuStats)

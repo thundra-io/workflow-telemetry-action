@@ -28302,6 +28302,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.report = exports.finish = exports.start = void 0;
 const child_process_1 = __nccwpck_require__(2081);
+const promises_1 = __importDefault(__nccwpck_require__(3292));
 const path_1 = __importDefault(__nccwpck_require__(1017));
 const axios_1 = __importDefault(__nccwpck_require__(8757));
 const core = __importStar(__nccwpck_require__(2186));
@@ -28478,6 +28479,17 @@ function getCPUStats() {
                 x: element.time,
                 y: element.systemLoad && element.systemLoad > 0 ? element.systemLoad : 0
             });
+        });
+        const outFilePath = path_1.default.join(__dirname, '../cpu-stats.json');
+        const cpuStats = JSON.stringify({ userLoadX, systemLoadX });
+        yield promises_1.default
+            .writeFile(outFilePath, cpuStats)
+            .then(() => {
+            logger.info(`CPU stats saved to ${outFilePath}`);
+        })
+            .catch((error) => {
+            logger.error(`Failed to save CPU stats to ${outFilePath}`);
+            logger.error(error);
         });
         return { userLoadX, systemLoadX };
     });
@@ -28772,6 +28784,14 @@ module.exports = require("events");
 
 "use strict";
 module.exports = require("fs");
+
+/***/ }),
+
+/***/ 3292:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("fs/promises");
 
 /***/ }),
 
