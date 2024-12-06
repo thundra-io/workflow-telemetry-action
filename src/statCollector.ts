@@ -220,6 +220,43 @@ async function reportWorkflowMetrics(): Promise<string> {
   return postContentItems.join('\n')
 }
 
+async function saveMetricsToArtifact(
+  metrics: string,
+  content: string,
+  fileName: string
+): Promise<void> {
+  if (core.getBooleanInput('save_raw_stats', { required: false })) {
+    const outFilePath = path.join(__dirname, '../', fileName)
+    await fs
+      .writeFile(outFilePath, content)
+      .then(async () => {
+        logger.info(metrics + ` stats saved to ${outFilePath}`)
+        await artifact
+          .uploadArtifact(
+            `${metrics}-stats-${github.context.runId}`,
+            [outFilePath],
+            path.dirname(outFilePath),
+            {
+              retentionDays: parseInt(
+                core.getInput('artifact_retention_days', { required: false })
+              )
+            }
+          )
+          .then(() => {
+            logger.info(`${metrics} stats artifact uploaded`)
+          })
+          .catch((error: any) => {
+            logger.error(`Failed to upload ${metrics} stats artifact`)
+            logger.error(error)
+          })
+      })
+      .catch((error: any) => {
+        logger.error(`Failed to save ${metrics} stats to ${outFilePath}`)
+        logger.error(error)
+      })
+  }
+}
+
 async function getCPUStats(): Promise<ProcessedCPUStats> {
   const userLoadX: ProcessedStats[] = []
   const systemLoadX: ProcessedStats[] = []
@@ -242,31 +279,11 @@ async function getCPUStats(): Promise<ProcessedCPUStats> {
     })
   })
 
-  const outFilePath = path.join(__dirname, '../cpu-stats.json')
-  const cpuStats = JSON.stringify({ userLoadX, systemLoadX })
-  await fs
-    .writeFile(outFilePath, cpuStats)
-    .then(async () => {
-      logger.info(`CPU stats saved to ${outFilePath}`)
-      await artifact
-        .uploadArtifact(
-          'cpu-stats-' + github.context.runId,
-          [outFilePath],
-          path.dirname(outFilePath)
-        )
-        .then(() => {
-          logger.info(`CPU stats artifact uploaded`)
-        })
-        .catch((error: any) => {
-          logger.error(`Failed to upload CPU stats artifact`)
-          logger.error(error)
-        })
-    })
-    .catch((error: any) => {
-      logger.error(`Failed to save CPU stats to ${outFilePath}`)
-      logger.error(error)
-    })
-
+  saveMetricsToArtifact(
+    'cpu',
+    JSON.stringify({ userLoadX, systemLoadX }),
+    'cpu-stats.json'
+  )
   return { userLoadX, systemLoadX }
 }
 
@@ -300,31 +317,11 @@ async function getMemoryStats(): Promise<ProcessedMemoryStats> {
     })
   })
 
-  const outFilePath = path.join(__dirname, '../memory-stats.json')
-  const memoryStats = JSON.stringify({ activeMemoryX, availableMemoryX })
-  await fs
-    .writeFile(outFilePath, memoryStats)
-    .then(async () => {
-      logger.info(`Memory stats saved to ${outFilePath}`)
-      await artifact
-        .uploadArtifact(
-          'memory-stats-' + github.context.runId,
-          [outFilePath],
-          path.dirname(outFilePath)
-        )
-        .then(() => {
-          logger.info(`Memory stats artifact uploaded`)
-        })
-        .catch((error: any) => {
-          logger.error(`Failed to upload Memory stats artifact`)
-          logger.error(error)
-        })
-    })
-    .catch((error: any) => {
-      logger.error(`Failed to save Memory stats to ${outFilePath}`)
-      logger.error(error)
-    })
-
+  saveMetricsToArtifact(
+    'memory',
+    JSON.stringify({ activeMemoryX, availableMemoryX }),
+    'memory-stats.json'
+  )
   return { activeMemoryX, availableMemoryX }
 }
 
@@ -352,31 +349,11 @@ async function getNetworkStats(): Promise<ProcessedNetworkStats> {
     })
   })
 
-  const outFilePath = path.join(__dirname, '../memory-stats.json')
-  const networkStats = JSON.stringify({ networkReadX, networkWriteX })
-  await fs
-    .writeFile(outFilePath, networkStats)
-    .then(async () => {
-      logger.info(`Network stats saved to ${outFilePath}`)
-      await artifact
-        .uploadArtifact(
-          'network-stats-' + github.context.runId,
-          [outFilePath],
-          path.dirname(outFilePath)
-        )
-        .then(() => {
-          logger.info(`Network stats artifact uploaded`)
-        })
-        .catch((error: any) => {
-          logger.error(`Failed to upload Network stats artifact`)
-          logger.error(error)
-        })
-    })
-    .catch((error: any) => {
-      logger.error(`Failed to save Network stats to ${outFilePath}`)
-      logger.error(error)
-    })
-
+  saveMetricsToArtifact(
+    'network',
+    JSON.stringify({ networkReadX, networkWriteX }),
+    'network-stats.json'
+  )
   return { networkReadX, networkWriteX }
 }
 
@@ -402,31 +379,11 @@ async function getDiskStats(): Promise<ProcessedDiskStats> {
     })
   })
 
-  const outFilePath = path.join(__dirname, '../disk-stats.json')
-  const diskStats = JSON.stringify({ diskReadX, diskWriteX })
-  await fs
-    .writeFile(outFilePath, diskStats)
-    .then(async () => {
-      logger.info(`Disk stats saved to ${outFilePath}`)
-      await artifact
-        .uploadArtifact(
-          'disk-stats-' + github.context.runId,
-          [outFilePath],
-          path.dirname(outFilePath)
-        )
-        .then(() => {
-          logger.info(`Disk stats artifact uploaded`)
-        })
-        .catch((error: any) => {
-          logger.error(`Failed to upload Disk stats artifact`)
-          logger.error(error)
-        })
-    })
-    .catch((error: any) => {
-      logger.error(`Failed to save Disk stats to ${outFilePath}`)
-      logger.error(error)
-    })
-
+  saveMetricsToArtifact(
+    'disk',
+    JSON.stringify({ diskReadX, diskWriteX }),
+    'disk-stats.json'
+  )
   return { diskReadX, diskWriteX }
 }
 
@@ -457,30 +414,11 @@ async function getDiskSizeStats(): Promise<ProcessedDiskSizeStats> {
     })
   })
 
-  const outFilePath = path.join(__dirname, '../disk-size-stats.json')
-  const diskSizeStats = JSON.stringify({ diskAvailableX, diskUsedX })
-  await fs
-    .writeFile(outFilePath, diskSizeStats)
-    .then(async () => {
-      logger.info(`Disk size stats saved to ${outFilePath}`)
-      await artifact
-        .uploadArtifact(
-          'disk-size-stats-' + github.context.runId,
-          [outFilePath],
-          path.dirname(outFilePath)
-        )
-        .then(() => {
-          logger.info(`Disk size stats artifact uploaded`)
-        })
-        .catch((error: any) => {
-          logger.error(`Failed to upload Disk size stats artifact`)
-          logger.error(error)
-        })
-    })
-    .catch((error: any) => {
-      logger.error(`Failed to save Disk size stats to ${outFilePath}`)
-      logger.error(error)
-    })
+  saveMetricsToArtifact(
+    'disk-size',
+    JSON.stringify({ diskAvailableX, diskUsedX }),
+    'disk-size-stats.json'
+  )
 
   return { diskAvailableX, diskUsedX }
 }
