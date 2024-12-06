@@ -1,4 +1,5 @@
 import { ChildProcess, spawn } from 'child_process'
+import fs from 'fs/promises'
 import path from 'path'
 import axios from 'axios'
 import * as core from '@actions/core'
@@ -236,6 +237,21 @@ async function getCPUStats(): Promise<ProcessedCPUStats> {
       y: element.systemLoad && element.systemLoad > 0 ? element.systemLoad : 0
     })
   })
+
+  const outFilePath = path.join(
+    __dirname,
+    '../cpu-stats.json',
+  )
+  const cpuStats = JSON.stringify({ userLoadX, systemLoadX })
+  await fs
+    .writeFile(outFilePath, cpuStats)
+    .then(() => {
+      logger.info(`CPU stats saved to ${outFilePath}`)
+    })
+    .catch((error: any) => {
+      logger.error(`Failed to save CPU stats to ${outFilePath}`)
+      logger.error(error)
+    })
 
   return { userLoadX, systemLoadX }
 }
