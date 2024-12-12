@@ -233,7 +233,7 @@ async function saveMetricsToArtifact(
         logger.info(metrics + ` stats saved to ${outFilePath}`)
         await artifact
           .uploadArtifact(
-            `${metrics}-stats-${github.context.runId}`,
+            `${metrics}-stats_${github.context.runId}_${github.context.job}`,
             [outFilePath],
             path.dirname(outFilePath),
             {
