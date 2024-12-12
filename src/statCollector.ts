@@ -2,6 +2,7 @@ import { ChildProcess, spawn } from 'child_process'
 import fs from 'fs/promises'
 import path from 'path'
 import axios from 'axios'
+import { v4 as uuidv4 } from 'uuid'
 import * as github from '@actions/github'
 import * as core from '@actions/core'
 import { DefaultArtifactClient } from '@actions/artifact'
@@ -233,7 +234,8 @@ async function saveMetricsToArtifact(
         logger.info(metrics + ` stats saved to ${outFilePath}`)
         await artifact
           .uploadArtifact(
-            `${metrics}-stats_${github.context.runId}_${github.context.job}`,
+            // The uuidv4() is used to avoid conflicts with multiple jobs of the same matrix
+            `${metrics}-stats_${github.context.runId}_${github.context.runNumber}_${github.context.job}_${uuidv4()}`,
             [outFilePath],
             path.dirname(outFilePath),
             {
