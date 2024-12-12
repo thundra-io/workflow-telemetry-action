@@ -33,6 +33,7 @@
   "author": "Serkan Özal <serkan@thundra.io>",
   "license": "MIT",
   "dependencies": {
+    "@actions/artifact": "^2.1.11",
     "@actions/core": "^1.10.0",
     "@actions/exec": "^1.1.0",
     "@actions/github": "^5.1.1",
@@ -40,7 +41,8 @@
     "@octokit/openapi-types": "^14.0.0",
     "axios": "^1.1.2",
     "sprintf-js": "^1.1.2",
-    "systeminformation": "^5.11.15"
+    "systeminformation": "^5.11.15",
+    "uuid": "^11.0.3"
   },
   "devDependencies": {
     "@types/node": "^16.3.3",

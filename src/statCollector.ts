@@ -1,7 +1,11 @@
 import { ChildProcess, spawn } from 'child_process'
+import fs from 'fs/promises'
 import path from 'path'
 import axios from 'axios'
+import { v4 as uuidv4 } from 'uuid'
+import * as github from '@actions/github'
 import * as core from '@actions/core'
+import { DefaultArtifactClient } from '@actions/artifact'
 import {
   CPUStats,
   DiskSizeStats,
@@ -26,6 +30,8 @@ const STAT_SERVER_PORT = 7777
 
 const BLACK = '#000000'
 const WHITE = '#FFFFFF'
+
+const artifact = new DefaultArtifactClient()
 
 async function triggerStatCollect(): Promise<void> {
   logger.debug('Triggering stat collect ...')
@@ -215,6 +221,44 @@ async function reportWorkflowMetrics(): Promise<string> {
   return postContentItems.join('\n')
 }
 
+async function saveMetricsToArtifact(
+  metrics: string,
+  content: string,
+  fileName: string
+): Promise<void> {
+  if (core.getBooleanInput('save_raw_stats', { required: false })) {
+    const outFilePath = path.join(__dirname, '../', fileName)
+    await fs
+      .writeFile(outFilePath, content)
+      .then(async () => {
+        logger.info(metrics + ` stats saved to ${outFilePath}`)
+        await artifact
+          .uploadArtifact(
+            // The uuidv4() is used to avoid conflicts with multiple jobs of the same matrix
+            `${metrics}-stats_${github.context.runId}_${github.context.runNumber}_${github.context.job}_${uuidv4()}`,
+            [outFilePath],
+            path.dirname(outFilePath),
+            {
+              retentionDays: parseInt(
+                core.getInput('artifact_retention_days', { required: false })
+              )
+            }
+          )
+          .then(() => {
+            logger.info(`${metrics} stats artifact uploaded`)
+          })
+          .catch((error: any) => {
+            logger.error(`Failed to upload ${metrics} stats artifact`)
+            logger.error(error)
+          })
+      })
+      .catch((error: any) => {
+        logger.error(`Failed to save ${metrics} stats to ${outFilePath}`)
+        logger.error(error)
+      })
+  }
+}
+
 async function getCPUStats(): Promise<ProcessedCPUStats> {
   const userLoadX: ProcessedStats[] = []
   const systemLoadX: ProcessedStats[] = []
@@ -237,6 +281,11 @@ async function getCPUStats(): Promise<ProcessedCPUStats> {
     })
   })
 
+  saveMetricsToArtifact(
+    'cpu',
+    JSON.stringify({ userLoadX, systemLoadX }),
+    'cpu-stats.json'
+  )
   return { userLoadX, systemLoadX }
 }
 
@@ -270,6 +319,11 @@ async function getMemoryStats(): Promise<ProcessedMemoryStats> {
     })
   })
 
+  saveMetricsToArtifact(
+    'memory',
+    JSON.stringify({ activeMemoryX, availableMemoryX }),
+    'memory-stats.json'
+  )
   return { activeMemoryX, availableMemoryX }
 }
 
@@ -297,6 +351,11 @@ async function getNetworkStats(): Promise<ProcessedNetworkStats> {
     })
   })
 
+  saveMetricsToArtifact(
+    'network',
+    JSON.stringify({ networkReadX, networkWriteX }),
+    'network-stats.json'
+  )
   return { networkReadX, networkWriteX }
 }
 
@@ -322,6 +381,11 @@ async function getDiskStats(): Promise<ProcessedDiskStats> {
     })
   })
 
+  saveMetricsToArtifact(
+    'disk',
+    JSON.stringify({ diskReadX, diskWriteX }),
+    'disk-stats.json'
+  )
   return { diskReadX, diskWriteX }
 }
 
@@ -351,6 +415,12 @@ async function getDiskSizeStats(): Promise<ProcessedDiskSizeStats> {
       y: element.usedSizeMb && element.usedSizeMb > 0 ? element.usedSizeMb : 0
     })
   })
+
+  saveMetricsToArtifact(
+    'disk-size',
+    JSON.stringify({ diskAvailableX, diskUsedX }),
+    'disk-size-stats.json'
+  )
 
   return { diskAvailableX, diskUsedX }
 }

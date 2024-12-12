@@ -75,3 +75,5 @@ jobs:
 | `comment_on_pr`              | Optional          | Set to `true` to publish the results as comment to the PR (applicable if workflow run is triggered by PR). Defaults to `true`. <br/> Requires `pull-requests: write` permission
 | `job_summary`                | Optional          | Set to `true` to publish the results as part of the [job summary page](https://github.blog/2022-05-09-supercharging-github-actions-with-job-summaries/) of the workflow run. Defaults to `true`.
 | `theme`                      | Optional          | Set to `dark` to generate charts compatible with Github **dark** mode. Defaults to `light`.
+| `save_raw_stats`             | Optional          | Set to `true` to save raw stats as artifacts. Defaults to `false`.
+| `artifact_retention_days`    | Optional          | Number of days to retain the stats artifacts. Defaults to `1`.
