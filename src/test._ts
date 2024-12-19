@@ -1,0 +1,9 @@
+import { report } from './processTracer'
+
+let result = await report("hello-world",{
+  procTraceOutFilePath: "/home/boris/GolandProjects/ebpf-running-timer/tracing.json",
+  procTraceSysEnable: true,
+  procTraceChartShow: true,
+})
+
+console.log(result)

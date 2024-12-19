@@ -4,17 +4,16 @@ import * as core from '@actions/core'
 import si from 'systeminformation'
 import { sprintf } from 'sprintf-js'
 import { parse } from './procTraceParser'
-import { CompletedCommand, WorkflowJobType } from './interfaces'
+import { CompletedCommand, ProcEventParseOptions, WorkflowJobType } from './interfaces'
 import * as logger from './logger'
 
 const PROC_TRACER_PID_KEY = 'PROC_TRACER_PID'
 const PROC_TRACER_OUTPUT_FILE_NAME = 'proc-trace.out'
-const PROC_TRACER_BINARY_NAME_UBUNTU_20: string = 'proc_tracer_ubuntu-20'
-const PROC_TRACER_BINARY_NAME_UBUNTU_22: string = 'proc_tracer_ubuntu-22'
+const PROC_TRACER_BINARY_NAME_UBUNTU: string = 'proc-tracer'
 const DEFAULT_PROC_TRACE_CHART_MAX_COUNT = 100
 const GHA_FILE_NAME_PREFIX = '/home/runner/work/_actions/'
 
-let finished = false
+let finished = true
 
 async function getProcessTracerBinaryName(): Promise<string | null> {
   const osInfo: si.Systeminformation.OsData = await si.osInfo()
@@ -23,13 +22,18 @@ async function getProcessTracerBinaryName(): Promise<string | null> {
     if (osInfo.distro === 'Ubuntu') {
       const majorVersion: number = parseInt(osInfo.release.split('.')[0])
       if (majorVersion === 20) {
-        logger.info(`Using ${PROC_TRACER_BINARY_NAME_UBUNTU_20}`)
-        return PROC_TRACER_BINARY_NAME_UBUNTU_20
+        logger.info(`Using ${PROC_TRACER_BINARY_NAME_UBUNTU}`)
+        return PROC_TRACER_BINARY_NAME_UBUNTU
       }
 
       if (majorVersion === 22) {
-        logger.info(`Using ${PROC_TRACER_BINARY_NAME_UBUNTU_22}`)
-        return PROC_TRACER_BINARY_NAME_UBUNTU_22
+        logger.info(`Using ${PROC_TRACER_BINARY_NAME_UBUNTU}`)
+        return PROC_TRACER_BINARY_NAME_UBUNTU
+      }
+
+      if (majorVersion === 24) {
+        logger.info(`Using ${PROC_TRACER_BINARY_NAME_UBUNTU}`)
+        return PROC_TRACER_BINARY_NAME_UBUNTU
       }
     }
   }
@@ -65,7 +69,7 @@ function getExtraProcessInfo(command: CompletedCommand): string | null {
 
 export async function start(): Promise<boolean> {
   logger.info(`Starting process tracer ...`)
-
+  finished=false
   try {
     const procTracerBinaryName: string | null =
       await getProcessTracerBinaryName()
@@ -79,24 +83,25 @@ export async function start(): Promise<boolean> {
         'sudo',
         [
           path.join(__dirname, `../proc-tracer/${procTracerBinaryName}`),
-          '-f',
+          '--format',
           'json',
-          '-o',
+          '--output',
           procTraceOutFilePath
         ],
         {
           detached: true,
-          stdio: 'ignore',
+          stdio: 'inherit',
           env: {
             ...process.env
           }
         }
       )
+
       child.unref()
 
       core.saveState(PROC_TRACER_PID_KEY, child.pid?.toString())
 
-      logger.info(`Started process tracer`)
+      logger.info(`Started process tracer pid=${child.pid?.toString()} binary=${path.join(__dirname, `../proc-tracer/${procTracerBinaryName}`)} output${procTraceOutFilePath}`)
 
       return true
     } else {
@@ -140,9 +145,23 @@ export async function finish(currentJob: WorkflowJobType): Promise<boolean> {
 }
 
 export async function report(
-  currentJob: WorkflowJobType
+  currentJob: string,
+  options: {
+    procTraceOutFilePath?: string,
+    procTraceMinDurationInput?: string,
+    procTraceSysEnable?: boolean,
+    procTraceChartShow?: boolean,
+    procTraceChartMaxCountInput?: number,
+    procTraceTableShow?: boolean,
+  }
 ): Promise<string | null> {
-  logger.info(`Reporting process tracer result ...`)
+  const procTraceOutFilePath = options.procTraceOutFilePath ?? path.join(
+    __dirname,
+    '../proc-tracer',
+    PROC_TRACER_OUTPUT_FILE_NAME
+  )
+
+  logger.info(`Reporting process tracer result file=${procTraceOutFilePath}`)
 
   if (!finished) {
     logger.info(
@@ -151,18 +170,13 @@ export async function report(
     return null
   }
   try {
-    const procTraceOutFilePath = path.join(
-      __dirname,
-      '../proc-tracer',
-      PROC_TRACER_OUTPUT_FILE_NAME
-    )
 
     logger.info(
       `Getting process tracer result from file ${procTraceOutFilePath} ...`
     )
 
     let procTraceMinDuration = -1
-    const procTraceMinDurationInput: string = core.getInput(
+    const procTraceMinDurationInput: string = options.procTraceMinDurationInput?? core.getInput(
       'proc_trace_min_duration'
     )
     if (procTraceMinDurationInput) {
@@ -171,19 +185,17 @@ export async function report(
         procTraceMinDuration = minProcDurationVal
       }
     }
-    const procTraceSysEnable: boolean =
-      core.getInput('proc_trace_sys_enable') === 'true'
+    const procTraceSysEnable: boolean = options.procTraceSysEnable ?? core.getInput('proc_trace_sys_enable') === 'true'
 
-    const procTraceChartShow: boolean =
-      core.getInput('proc_trace_chart_show') === 'true'
-    const procTraceChartMaxCountInput: number = parseInt(
+    const procTraceChartShow: boolean = options.procTraceChartShow ?? core.getInput('proc_trace_chart_show') === 'true'
+    const procTraceChartMaxCountInput: number = options.procTraceChartMaxCountInput ?? parseInt(
       core.getInput('proc_trace_chart_max_count')
     )
     const procTraceChartMaxCount = Number.isInteger(procTraceChartMaxCountInput)
       ? procTraceChartMaxCountInput
       : DEFAULT_PROC_TRACE_CHART_MAX_COUNT
-    const procTraceTableShow: boolean =
-      core.getInput('proc_trace_table_show') === 'true'
+
+    const procTraceTableShow: boolean = options.procTraceTableShow ?? core.getInput('proc_trace_table_show') === 'true'
 
     const completedCommands: CompletedCommand[] = await parse(
       procTraceOutFilePath,
@@ -199,21 +211,17 @@ export async function report(
 
     if (procTraceChartShow) {
       chartContent = chartContent.concat('gantt', '\n')
-      chartContent = chartContent.concat('\t', `title ${currentJob.name}`, '\n')
+      chartContent = chartContent.concat('\t', `title ${currentJob}`, '\n')
       chartContent = chartContent.concat('\t', `dateFormat x`, '\n')
       chartContent = chartContent.concat('\t', `axisFormat %H:%M:%S`, '\n')
 
       const filteredCommands: CompletedCommand[] = [...completedCommands]
         .sort((a: CompletedCommand, b: CompletedCommand) => {
-          return -(a.duration - b.duration)
+          return -(a.durationNs - b.durationNs)
         })
         .slice(0, procTraceChartMaxCount)
         .sort((a: CompletedCommand, b: CompletedCommand) => {
-          let result = a.startTime - b.startTime
-          if (result === 0 && a.order && b.order) {
-            result = a.order - b.order
-          }
-          return result
+          return a.startTimeNs - b.startTimeNs
         })
 
       for (const command of filteredCommands) {
@@ -232,10 +240,10 @@ export async function report(
           chartContent = chartContent.concat('crit, ')
         }
 
-        const startTime: number = command.startTime
-        const finishTime: number = command.startTime + command.duration
+        const startTimeMs: number = Math.round(command.startTimeNs / 10e6)
+        const finishTimeMs: number = Math.round((command.startTimeNs + command.durationNs) / 10e6)
         chartContent = chartContent.concat(
-          `${Math.min(startTime, finishTime)}, ${finishTime}`,
+          `${startTimeMs}, ${finishTimeMs}`,
           '\n'
         )
       }
@@ -249,8 +257,7 @@ export async function report(
       const commandInfos: string[] = []
       commandInfos.push(
         sprintf(
-          '%-12s %-16s %7s %7s %7s %15s %15s %10s %-20s',
-          'TIME',
+          '%-16s %7s %7s %7s %15s %15s %10s %-20s',
           'NAME',
           'UID',
           'PID',
@@ -264,14 +271,12 @@ export async function report(
       for (const command of completedCommands) {
         commandInfos.push(
           sprintf(
-            '%-12s %-16s %7d %7d %7d %15d %15d %10d %s %s',
-            command.ts,
+            '%-16s %7d %7d %15d %15d %10d %s %s',
             command.name,
-            command.uid,
             command.pid,
             command.ppid,
-            command.startTime,
-            command.duration,
+            Math.round(command.startTimeNs / 10e6),
+            Math.round(command.durationNs / 10e6),
             command.exitCode,
             command.fileName,
             command.args.join(' ')

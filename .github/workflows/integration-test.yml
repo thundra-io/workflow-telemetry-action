@@ -1,0 +1,23 @@
+permissions:
+  pull-requests: write
+on:
+  workflow_dispatch:
+jobs:
+  workflow-telemetry-action-integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Collect Workflow Telemetry
+        uses: borissmidt/workflow-telemetry-action@v3.0.0
+        with:
+          proc_trace_sys_enable: true
+          proc_trace_chart_show: true
+          proc_trace_table_show: true
+      - run: |
+          id
+          whoami
+          ls -a
+          ps aux
+          sleep 1
+          sleep 3
+          sleep 2
+          find -name "*.out"

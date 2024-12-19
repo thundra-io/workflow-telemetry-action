@@ -44525,10 +44525,7 @@ function parse(filePath, procEventParseOptions) {
         });
         // Note: we use the crlfDelay option to recognize all instances of CR LF
         // ('\r\n') in input file as a single line break.
-        const activeCommands = new Map();
-        const replacedCommands = new Map();
         const completedCommands = [];
-        let commandOrder = 0;
         try {
             for (var _d = true, rl_1 = __asyncValues(rl), rl_1_1; rl_1_1 = yield rl_1.next(), _a = rl_1_1.done, !_a; _d = true) {
                 _c = rl_1_1.value;
@@ -44543,59 +44540,11 @@ function parse(filePath, procEventParseOptions) {
                         logger.debug(`Parsing trace process event: ${line}`);
                     }
                     const event = JSON.parse(line);
-                    event.order = ++commandOrder;
-                    if (!traceSystemProcesses && SYS_PROCS_TO_BE_IGNORED.has(event.name)) {
+                    // filter out short living processes.
+                    if (event.durationNs < minDuration) {
                         continue;
                     }
-                    if ('EXEC' === event.event) {
-                        const existingCommand = activeCommands.get(event.pid);
-                        activeCommands.set(event.pid, event);
-                        if (existingCommand) {
-                            replacedCommands.set(event.pid, existingCommand);
-                        }
-                    }
-                    else if ('EXIT' === event.event) {
-                        let activeCommandCompleted = false;
-                        let replacedCommandCompleted = false;
-                        // Process active command
-                        const activeCommand = activeCommands.get(event.pid);
-                        activeCommands.delete(event.pid);
-                        if (activeCommand) {
-                            for (let key of Object.keys(event)) {
-                                if (!activeCommand.hasOwnProperty(key)) {
-                                    activeCommand[key] = event[key];
-                                }
-                            }
-                            activeCommandCompleted = true;
-                        }
-                        // Process replaced command if there is
-                        const replacedCommand = replacedCommands.get(event.pid);
-                        replacedCommands.delete(event.pid);
-                        if (replacedCommand && activeCommandCompleted) {
-                            for (let key of Object.keys(event)) {
-                                if (!replacedCommand.hasOwnProperty(key)) {
-                                    replacedCommand[key] = event[key];
-                                }
-                            }
-                            const finishTime = activeCommand.startTime + activeCommand.duration;
-                            replacedCommand.duration = finishTime - replacedCommand.startTime;
-                            replacedCommandCompleted = true;
-                        }
-                        // Complete the replaced command first if there is
-                        if (replacedCommandCompleted &&
-                            replacedCommand.duration > minDuration) {
-                            completedCommands.push(replacedCommand);
-                        }
-                        // Then complete the actual command
-                        if (activeCommandCompleted && activeCommand.duration > minDuration) {
-                            completedCommands.push(activeCommand);
-                        }
-                    }
-                    else {
-                        if (logger.isDebugEnabled()) {
-                            logger.debug(`Unknown trace process event: ${line}`);
-                        }
-                    }
+                    completedCommands.push(event);
                 }
                 catch (error) {
                     logger.debug(`Unable to parse process trace event (${error}): ${line}`);
@@ -44610,7 +44559,7 @@ function parse(filePath, procEventParseOptions) {
             finally { if (e_1) throw e_1.error; }
         }
         completedCommands.sort((a, b) => {
-            return a.startTime - b.startTime;
+            return a.startTimeNs - b.startTimeNs;
         });
         if (logger.isDebugEnabled()) {
             logger.debug(`Completed commands: ${JSON.stringify(completedCommands)}`);
@@ -44674,11 +44623,10 @@ const procTraceParser_1 = __nccwpck_require__(9576);
 const logger = __importStar(__nccwpck_require__(4636));
 const PROC_TRACER_PID_KEY = 'PROC_TRACER_PID';
 const PROC_TRACER_OUTPUT_FILE_NAME = 'proc-trace.out';
-const PROC_TRACER_BINARY_NAME_UBUNTU_20 = 'proc_tracer_ubuntu-20';
-const PROC_TRACER_BINARY_NAME_UBUNTU_22 = 'proc_tracer_ubuntu-22';
+const PROC_TRACER_BINARY_NAME_UBUNTU = 'proc-tracer';
 const DEFAULT_PROC_TRACE_CHART_MAX_COUNT = 100;
 const GHA_FILE_NAME_PREFIX = '/home/runner/work/_actions/';
-let finished = false;
+let finished = true;
 function getProcessTracerBinaryName() {
     return __awaiter(this, void 0, void 0, function* () {
         const osInfo = yield systeminformation_1.default.osInfo();
@@ -44687,12 +44635,16 @@ function getProcessTracerBinaryName() {
             if (osInfo.distro === 'Ubuntu') {
                 const majorVersion = parseInt(osInfo.release.split('.')[0]);
                 if (majorVersion === 20) {
-                    logger.info(`Using ${PROC_TRACER_BINARY_NAME_UBUNTU_20}`);
-                    return PROC_TRACER_BINARY_NAME_UBUNTU_20;
+                    logger.info(`Using ${PROC_TRACER_BINARY_NAME_UBUNTU}`);
+                    return PROC_TRACER_BINARY_NAME_UBUNTU;
                 }
                 if (majorVersion === 22) {
-                    logger.info(`Using ${PROC_TRACER_BINARY_NAME_UBUNTU_22}`);
-                    return PROC_TRACER_BINARY_NAME_UBUNTU_22;
+                    logger.info(`Using ${PROC_TRACER_BINARY_NAME_UBUNTU}`);
+                    return PROC_TRACER_BINARY_NAME_UBUNTU;
+                }
+                if (majorVersion === 24) {
+                    logger.info(`Using ${PROC_TRACER_BINARY_NAME_UBUNTU}`);
+                    return PROC_TRACER_BINARY_NAME_UBUNTU;
                 }
             }
         }
@@ -44719,27 +44671,28 @@ function getExtraProcessInfo(command) {
 }
 ///////////////////////////
 function start() {
-    var _a;
+    var _a, _b;
     return __awaiter(this, void 0, void 0, function* () {
         logger.info(`Starting process tracer ...`);
+        finished = false;
         try {
             const procTracerBinaryName = yield getProcessTracerBinaryName();
             if (procTracerBinaryName) {
                 const procTraceOutFilePath = path_1.default.join(__dirname, '../proc-tracer', PROC_TRACER_OUTPUT_FILE_NAME);
                 const child = (0, child_process_1.spawn)('sudo', [
                     path_1.default.join(__dirname, `../proc-tracer/${procTracerBinaryName}`),
-                    '-f',
+                    '--format',
                     'json',
-                    '-o',
+                    '--output',
                     procTraceOutFilePath
                 ], {
                     detached: true,
-                    stdio: 'ignore',
+                    stdio: 'inherit',
                     env: Object.assign({}, process.env)
                 });
                 child.unref();
                 core.saveState(PROC_TRACER_PID_KEY, (_a = child.pid) === null || _a === void 0 ? void 0 : _a.toString());
-                logger.info(`Started process tracer`);
+                logger.info(`Started process tracer pid=${(_b = child.pid) === null || _b === void 0 ? void 0 : _b.toString()} binary=${path_1.default.join(__dirname, `../proc-tracer/${procTracerBinaryName}`)} output${procTraceOutFilePath}`);
                 return true;
             }
             else {
@@ -44777,31 +44730,32 @@ function finish(currentJob) {
     });
 }
 exports.finish = finish;
-function report(currentJob) {
+function report(currentJob, options) {
+    var _a, _b, _c, _d, _e, _f;
     return __awaiter(this, void 0, void 0, function* () {
-        logger.info(`Reporting process tracer result ...`);
+        const procTraceOutFilePath = (_a = options.procTraceOutFilePath) !== null && _a !== void 0 ? _a : path_1.default.join(__dirname, '../proc-tracer', PROC_TRACER_OUTPUT_FILE_NAME);
+        logger.info(`Reporting process tracer result file=${procTraceOutFilePath}`);
         if (!finished) {
             logger.info(`Skipped reporting process tracer since process tracer didn't finished`);
             return null;
         }
         try {
-            const procTraceOutFilePath = path_1.default.join(__dirname, '../proc-tracer', PROC_TRACER_OUTPUT_FILE_NAME);
             logger.info(`Getting process tracer result from file ${procTraceOutFilePath} ...`);
             let procTraceMinDuration = -1;
-            const procTraceMinDurationInput = core.getInput('proc_trace_min_duration');
+            const procTraceMinDurationInput = (_b = options.procTraceMinDurationInput) !== null && _b !== void 0 ? _b : core.getInput('proc_trace_min_duration');
             if (procTraceMinDurationInput) {
                 const minProcDurationVal = parseInt(procTraceMinDurationInput);
                 if (Number.isInteger(minProcDurationVal)) {
                     procTraceMinDuration = minProcDurationVal;
                 }
             }
-            const procTraceSysEnable = core.getInput('proc_trace_sys_enable') === 'true';
-            const procTraceChartShow = core.getInput('proc_trace_chart_show') === 'true';
-            const procTraceChartMaxCountInput = parseInt(core.getInput('proc_trace_chart_max_count'));
+            const procTraceSysEnable = (_c = options.procTraceSysEnable) !== null && _c !== void 0 ? _c : core.getInput('proc_trace_sys_enable') === 'true';
+            const procTraceChartShow = (_d = options.procTraceChartShow) !== null && _d !== void 0 ? _d : core.getInput('proc_trace_chart_show') === 'true';
+            const procTraceChartMaxCountInput = (_e = options.procTraceChartMaxCountInput) !== null && _e !== void 0 ? _e : parseInt(core.getInput('proc_trace_chart_max_count'));
             const procTraceChartMaxCount = Number.isInteger(procTraceChartMaxCountInput)
                 ? procTraceChartMaxCountInput
                 : DEFAULT_PROC_TRACE_CHART_MAX_COUNT;
-            const procTraceTableShow = core.getInput('proc_trace_table_show') === 'true';
+            const procTraceTableShow = (_f = options.procTraceTableShow) !== null && _f !== void 0 ? _f : core.getInput('proc_trace_table_show') === 'true';
             const completedCommands = yield (0, procTraceParser_1.parse)(procTraceOutFilePath, {
                 minDuration: procTraceMinDuration,
                 traceSystemProcesses: procTraceSysEnable
@@ -44810,20 +44764,16 @@ function report(currentJob) {
             let chartContent = '';
             if (procTraceChartShow) {
                 chartContent = chartContent.concat('gantt', '\n');
-                chartContent = chartContent.concat('\t', `title ${currentJob.name}`, '\n');
+                chartContent = chartContent.concat('\t', `title ${currentJob}`, '\n');
                 chartContent = chartContent.concat('\t', `dateFormat x`, '\n');
                 chartContent = chartContent.concat('\t', `axisFormat %H:%M:%S`, '\n');
                 const filteredCommands = [...completedCommands]
                     .sort((a, b) => {
-                    return -(a.duration - b.duration);
+                    return -(a.durationNs - b.durationNs);
                 })
                     .slice(0, procTraceChartMaxCount)
                     .sort((a, b) => {
-                    let result = a.startTime - b.startTime;
-                    if (result === 0 && a.order && b.order) {
-                        result = a.order - b.order;
-                    }
-                    return result;
+                    return a.startTimeNs - b.startTimeNs;
                 });
                 for (const command of filteredCommands) {
                     const extraProcessInfo = getExtraProcessInfo(command);
@@ -44838,18 +44788,18 @@ function report(currentJob) {
                         // to show red
                         chartContent = chartContent.concat('crit, ');
                     }
-                    const startTime = command.startTime;
-                    const finishTime = command.startTime + command.duration;
-                    chartContent = chartContent.concat(`${Math.min(startTime, finishTime)}, ${finishTime}`, '\n');
+                    const startTimeMs = Math.round(command.startTimeNs / 10e6);
+                    const finishTimeMs = Math.round((command.startTimeNs + command.durationNs) / 10e6);
+                    chartContent = chartContent.concat(`${startTimeMs}, ${finishTimeMs}`, '\n');
                 }
             }
             ///////////////////////////////////////////////////////////////////////////
             let tableContent = '';
             if (procTraceTableShow) {
                 const commandInfos = [];
-                commandInfos.push((0, sprintf_js_1.sprintf)('%-12s %-16s %7s %7s %7s %15s %15s %10s %-20s', 'TIME', 'NAME', 'UID', 'PID', 'PPID', 'START TIME', 'DURATION (ms)', 'EXIT CODE', 'FILE NAME + ARGS'));
+                commandInfos.push((0, sprintf_js_1.sprintf)('%-16s %7s %7s %7s %15s %15s %10s %-20s', 'NAME', 'UID', 'PID', 'PPID', 'START TIME', 'DURATION (ms)', 'EXIT CODE', 'FILE NAME + ARGS'));
                 for (const command of completedCommands) {
-                    commandInfos.push((0, sprintf_js_1.sprintf)('%-12s %-16s %7d %7d %7d %15d %15d %10d %s %s', command.ts, command.name, command.uid, command.pid, command.ppid, command.startTime, command.duration, command.exitCode, command.fileName, command.args.join(' ')));
+                    commandInfos.push((0, sprintf_js_1.sprintf)('%-16s %7d %7d %15d %15d %10d %s %s', command.name, command.pid, command.ppid, Math.round(command.startTimeNs / 10e6), Math.round(command.durationNs / 10e6), command.exitCode, command.fileName, command.args.join(' ')));
                 }
                 tableContent = commandInfos.join('\n');
             }
